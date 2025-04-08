@@ -353,11 +353,12 @@ def get_gpu_kernel_gemm_time_s(f, *args, **kwargs):
     cache = torch.empty(int(256e6 // 4), dtype=torch.int, device="cuda")
 
     n_iter = 100
-    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
+    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], with_stack=True) as prof:
         for idx in range(n_iter):
             # we clear the L2 cache before each run
             cache.zero_()
             f(*args, **kwargs)
+    prof.export_chrome_trace("trace.json")
     data = profiler_output_to_filtered_time_by_kernel_name(
         prof, n_iter, num_leaf_tensors=0
     )

@@ -79,9 +79,16 @@ def profiler_output_to_filtered_time_by_kernel_name(
                 num_iter * num_leaf_tensors
             ), f"unexpected number of iter for {e.key}"
             continue
+        elif e.key == "aten::fill_":
+            assert e.count == num_iter, f"unexpected number of iter for {e.key}"
+            continue
         elif e.key == "cudaDeviceSynchronize":
             continue
         elif e.key == "Activity Buffer Request":
+            continue
+        elif e.key == "Unrecognized":
+            continue
+        elif e.key == "Runtime Triggered Module Loading":
             continue
 
         kernel_name_to_gpu_time_us[e.key] = e.self_device_time_total
@@ -340,9 +347,16 @@ def update_triton_kernels_in_prof_chome_trace_with_torch_logs(
 def get_gpu_kernel_gemm_time_s(f, *args, **kwargs):
     # warmup
     f(*args, **kwargs)
-    n_iter = 5
+    import torch
+
+    torch.cuda.synchronize()
+    cache = torch.empty(int(256e6 // 4), dtype=torch.int, device="cuda")
+
+    n_iter = 100
     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
         for idx in range(n_iter):
+            # we clear the L2 cache before each run
+            cache.zero_()
             f(*args, **kwargs)
     data = profiler_output_to_filtered_time_by_kernel_name(
         prof, n_iter, num_leaf_tensors=0
